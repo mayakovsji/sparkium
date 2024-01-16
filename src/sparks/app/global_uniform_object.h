@@ -21,5 +21,8 @@ struct GlobalUniformObject {
   float clamp{100.0f};
   float gamma{2.2f};
   float aspect{1.0f};
+  int enable_depth{1};
+  int enable_motion{0};
+  glm::vec3 dir_motion{1.0f, 0.0f, 0.0f};
 };
 }  // namespace sparks

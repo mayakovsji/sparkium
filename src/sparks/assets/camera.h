@@ -34,6 +34,15 @@ class Camera {
   [[nodiscard]] float GetGamma() const {
     return gamma_;
   }
+  [[nodiscard]] int GetEnableMotion() const {
+    return enable_motion_;
+  }
+  [[nodiscard]] int GetEnableDepth() const {
+    return enable_depth_;
+  }
+  [[nodiscard]] glm::vec3 GetDirMotion() const {
+    return dir_motion_;
+  }
 
  private:
   float fov_{60.0f};
@@ -41,5 +50,8 @@ class Camera {
   float focal_length_{3.0f};
   float clamp_{100.0f};
   float gamma_{2.2f};
+  int enable_motion_{0};
+  int enable_depth_{1};
+  glm::vec3 dir_motion_{1.0f, 0.0f, 0.0f};
 };
 }  // namespace sparks

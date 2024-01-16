@@ -4,5 +4,6 @@
 namespace sparks {
 struct EntityUniformObject {
   glm::mat4 model;
+  float area;
 };
 }  // namespace sparks

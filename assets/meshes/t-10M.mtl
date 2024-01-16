@@ -1,0 +1,57 @@
+# Blender 4.0.2 MTL File: 'None'
+# www.blender.org
+
+newmtl body
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 2
+map_Kd LilyPackedImage-0000.png
+map_refl LilyPackedImage-0000.png
+
+newmtl gusi
+Ns 640.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 2
+map_Kd LilyPackedImage-0000.png
+map_refl LilyPackedImage-0000.png
+
+newmtl turret
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.447619 0.447619 0.447619
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 2
+map_Kd LilyPackedImage-0000.png
+map_refl LilyPackedImage-0000.png
+
+newmtl wheel1
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 2
+map_Kd LilyPackedImage-0000.png
+map_Ns LilyPackedImage-0000.png
+map_refl LilyPackedImage-0000.png
+
+newmtl wheel_2
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 2
+map_Kd LilyPackedImage-0000.png
+map_Ns LilyPackedImage-0000.png
+map_refl LilyPackedImage-0000.png

@@ -499,8 +499,9 @@ void App::UpdateImGui() {
       ImGui::Text("Material");
       ImGui::Separator();
       static int current_item = 0;
-      std::vector<const char *> material_types = {
-          "Lambertian", "Specular", "Transmissive", "Principled", "Emission"};
+      std::vector<const char *> material_types = {"Lambertian",   "Specular",
+                                                  "Transmissive", "Principled", "Emission",
+          "Microsurface", "Smoke"};
       Material &material = scene.GetEntity(selected_entity_id_).GetMaterial();
       reset_accumulation_ |=
           ImGui::Combo("Type", reinterpret_cast<int *>(&material.material_type),
@@ -651,6 +652,9 @@ void App::UpdateDynamicBuffer() {
   global_uniform_object.fov = camera.GetFov();
   global_uniform_object.aperture = camera.GetAperture();
   global_uniform_object.focal_length = camera.GetFocalLength();
+  global_uniform_object.enable_depth = camera.GetEnableDepth();
+  global_uniform_object.enable_motion = camera.GetEnableMotion();
+  global_uniform_object.dir_motion = camera.GetDirMotion();
   global_uniform_object.clamp = camera.GetClamp();
   global_uniform_object.gamma = camera.GetGamma();
   global_uniform_object.aspect = float(core_->GetFramebufferWidth()) /
@@ -667,6 +671,7 @@ void App::UpdateDynamicBuffer() {
   for (int i = 0; i < entities.size(); i++) {
     auto &entity = entities[i];
     entity_uniform_buffer_->operator[](i).model = entity.GetTransformMatrix();
+    entity_uniform_buffer_->operator[](i).area = entity.GetArea();
     material_uniform_buffer_->operator[](i) = entity.GetMaterial();
   }
 }

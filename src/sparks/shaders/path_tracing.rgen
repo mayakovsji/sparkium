@@ -37,13 +37,12 @@ layout(location = 0) rayPayloadEXT RayPayload ray_payload;
 // clang-format off
 #include "vertex.glsl"
 #include "hit_record.glsl"
-#include "random.glsl"
 // clang-format on
 
 vec3 SampleEnvmap(vec3 direction) {
   float x = guo.envmap_offset;
   float y = acos(direction.y) * INV_PI;
-  if (length(vec2(direction.x, direction.y)) > 1e-4) {
+  if (length(vec2(direction.x, direction.y)) > 0.01) {
     x += atan(direction.x, -direction.z);
   }
   x *= INV_PI * 0.5;
@@ -53,7 +52,8 @@ vec3 SampleEnvmap(vec3 direction) {
 
 HitRecord hit_record;
 void TraceRay(vec3 origin, vec3 direction) {
-  float tmin = 1e-3;
+  //想不明白改啥就改改这个
+  float tmin = 0.01;
   float tmax = 1e4;
 
   ray_payload.t = -1.0;
@@ -67,10 +67,272 @@ void TraceRay(vec3 origin, vec3 direction) {
   hit_record = GetHitRecord(ray_payload, origin, direction);
 }
 
+vec3 toWorld(vec3 a, vec3 n){
+  vec3 b, c;
+  if (abs(n.x) > abs(n.y)){
+    float invLen = 1.0 / sqrt(n.x * n.x + n.z * n.z);
+    c = vec3(n.z * invLen, 0.0, -n.x *invLen);
+  }
+  else {
+    float invLen = 1 / sqrt(n.y * n.y + n.z * n.z);
+    c = vec3(0.0, n.z * invLen, -n.y *invLen);
+  }
+  b = cross(c, n);
+  return a.x * b + a.y * c + a.z * n;
+}
+
+vec3 calculateBarycentricCoordinates(vec3 v0, vec3 v1, vec3 v2, vec3 P) {
+    vec3 e0 = v1 - v0;
+    vec3 e1 = v2 - v0;
+    vec3 e2 = P - v0;
+
+    float dot00 = dot(e0, e0);
+    float dot01 = dot(e0, e1);
+    float dot02 = dot(e0, e2);
+    float dot11 = dot(e1, e1);
+    float dot12 = dot(e1, e2);
+
+    float denom = dot00 * dot11 - dot01 * dot01;
+    float alpha = (dot11 * dot02 - dot01 * dot12) / denom;
+    float beta = (dot00 * dot12 - dot01 * dot02) / denom;
+    float gamma = 1.0 - alpha - beta;
+
+    return vec3(alpha, beta, gamma);
+}
+
+
+HitRecord SampleLight(inout float pdf_light) {
+  float emit_area = 0;
+  for (int i = 0; i < entity_objects.length(); i++){
+    if (materials[i].material_type == MATERIAL_TYPE_EMISSION){
+      emit_area += entity_objects[i].area;
+    }
+  }  
+  float p = RandomFloat() * emit_area;
+  HitRecord light_hit_record;
+  emit_area = 0;
+  for (int i = 0; i < entity_objects.length(); i++){
+    if (materials[i].material_type == MATERIAL_TYPE_EMISSION){
+      emit_area += entity_objects[i].area;
+      if (p <= emit_area){
+        
+        int num_vertices; 
+        if (i + 1 == entity_objects.length() ) 
+          num_vertices = int((vertices.length() + 1 - object_infos[i].index_offset) / 3);
+        else 
+          num_vertices = int((object_infos[i + 1].index_offset - object_infos[i].index_offset) / 3);
+
+        ObjectInfo object_info = object_infos[i];
+
+        int q = int(RandomFloat() * num_vertices);
+        Vertex v0 = GetVertex(object_info.vertex_offset + indices[object_info.index_offset + q * 3 + 0]);
+        Vertex v1 = GetVertex(object_info.vertex_offset +
+        indices[object_info.index_offset + q * 3 + 1]);
+        Vertex v2 = GetVertex(object_info.vertex_offset +
+        indices[object_info.index_offset + q * 3 + 2]);
+
+        vec3 pos_v0 = vec3(entity_objects[i].model * vec4(v0.position, 1.0));
+        vec3 pos_v1 = vec3(entity_objects[i].model * vec4(v1.position, 1.0));
+        vec3 pos_v2 = vec3(entity_objects[i].model * vec4(v2.position, 1.0));
+        float u = sqrt(RandomFloat()), v = RandomFloat();
+        light_hit_record.position = pos_v0 * (1.0 - u) + pos_v1 * (u * (1.0 - v)) + pos_v2 * (u * v);
+        
+        vec3 barycentric = calculateBarycentricCoordinates(pos_v0, pos_v1, pos_v2, light_hit_record.position);
+        light_hit_record.normal = normalize(vec3(inverse(transpose(entity_objects[i].model)) * vec4(mat3(v0.normal, v1.normal, v2.normal) * barycentric, 0.0)));
+        //light_hit_record.normal = mat3(v0.normal, v1.normal, v2.normal) * barycentric;
+        
+        light_hit_record.emission = materials[i].emission;
+        light_hit_record.emission_strength = materials[i].emission_strength;
+        pdf_light = 1.0 / entity_objects[i].area;
+        break;
+      }
+    }
+  }
+  return light_hit_record;
+}
+
+float sigma_t = 1;
+float G = 0.76;
+
+float HG(float cos_theta){
+  return ((1.0 - G*G) / pow(abs(1.0 + G*G - 2.0 * G * cos_theta), 1.5)) / (4 * PI);
+}
+
+//对HG重要性采样
+//float cosTheta = (1.0 + g * g - ((1.0 - g * g) / ((1.0 - g) + 2.0 * g * xi) * ((1.0 - g * g) / ((1.0 - g) + 2.0 * g * xi)))) / (2.0 * g);
+
+vec3 SingleScattering(vec3 start, vec3 end, vec3 end_radiance) {
+    vec3 current_pos = start;
+    vec3 scattering = vec3(0.0);
+    float step_size = 0.1;
+    float dis = length(start - end);
+    float sigma = sigma_t * exp(dis / 100);
+    float step_length = dis * step_size;
+    vec3 last_radiance = end_radiance * exp(-sigma * step_length);
+    vec3 dir = normalize(end - start);
+    
+
+    for (float t = 0.0; t < 1.0; t += step_size) {
+        current_pos = mix(end, start, t);
+        float distance = length(current_pos - start), pdf_light = 0.0;
+        HitRecord light_hit_record = SampleLight(pdf_light);
+
+        vec3 p = current_pos;
+        vec3 p_l = light_hit_record.position;
+        vec3 n_l = light_hit_record.normal;
+        vec3 dir_lp = normalize(p - p_l);
+        if (dot(n_l, dir_lp) < 0.0) n_l = -n_l;
+        float dis_lp = length(p - p_l);
+        
+        pdf_light = pdf_light * dis_lp * dis_lp / dot(dir_lp, n_l);
+
+      TraceRay(p_l, dir_lp);
+      vec3 reflection, L_dir = vec3(0.0);
+      if((length(hit_record.position - p_l) - dis_lp > -0.01)) {
+        L_dir = light_hit_record.emission * light_hit_record.emission_strength * exp(-sigma * t * dis) *  HG (dot(dir_lp, dir)) / pdf_light + vec3(length(light_hit_record.emission * light_hit_record.emission_strength + last_radiance)) * 0.8 * (1 - exp(-sigma * t * dis)) / pdf_light; 
+      } else 
+        L_dir = vec3(0.0);
+        last_radiance = L_dir + last_radiance * exp(-sigma * step_length);
+    }
+    return last_radiance;
+}
+
 vec3 SampleRay(vec3 origin, vec3 direction) {
+  direction = normalize(direction);
   vec3 radiance = vec3(0.0);
   vec3 throughput = vec3(1.0);
-  for (int b = 0; b < guo.num_bounces; b++) {
+  vec3 start, end; //For smoke
+  int depth = 0;
+  uint type_smoke = 0;
+
+  //return origin;
+  
+  
+  while (true){
+    if (type_smoke == 1 && depth >= 2) {
+      return throughput * SingleScattering(start, end, radiance);
+    }
+    TraceRay(origin, direction);
+    if (ray_payload.t < 0.0) {
+        radiance += throughput * SampleEnvmap(direction);
+      break;
+    }
+
+    Material material = materials[hit_record.hit_entity_id];
+    if (material.material_type == MATERIAL_TYPE_EMISSION) {
+      radiance += throughput * material.emission * material.emission_strength;
+      break;
+    }
+
+    if (material.material_type == MATERIAL_TYPE_SPECULAR) {
+      throughput *= material.albedo_color * vec3(texture(texture_samplers[material.albedo_texture_id], hit_record.tex_coord));
+      origin = hit_record.position;
+      direction = reflect(direction, hit_record.normal);
+      continue;
+    }
+
+    if (material.material_type == MATERIAL_TYPE_SMOKE) {
+      if (type_smoke == 1){
+        vec3 p_start = hit_record.position;
+        TraceRay(hit_record.position + 0.001 * direction, direction);
+        origin = hit_record.position + 0.001 * direction ;
+        throughput *= exp(-sigma_t * length(hit_record.position - p_start));
+        continue;
+      }
+      start = hit_record.position;
+      TraceRay(start, direction);
+      end = hit_record.position;
+      if (hit_record.material_type == MATERIAL_TYPE_SMOKE && length(end - start) > 0.01){
+        type_smoke = 1;
+        origin = end;
+        depth += 1;
+        continue;
+      }
+
+    }
+    float pdf_light = 0.0;
+
+    //return material.albedo_color * vec3(texture(texture_samplers[material.albedo_texture_id], hit_record.tex_coord));
+
+    HitRecord hit_record_p = hit_record;
+    HitRecord light_hit_record = SampleLight(pdf_light);
+    vec3 p = hit_record_p.position;
+    vec3 n = hit_record_p.normal;
+
+    vec3 p_l = light_hit_record.position;
+    vec3 n_l = light_hit_record.normal;
+    vec3 dir_lp = normalize(p - p_l);
+    if (dot(n_l, dir_lp) < 0.0) n_l = -n_l;
+    float dis_lp = length(p - p_l);
+    pdf_light = pdf_light * dis_lp * dis_lp / dot(dir_lp, n_l); //转化对立体角
+    float prob_mis = RandomFloat();
+    vec3 dir_h = SampleReflect(direction, n, material, 1);
+    dir_h = toWorld(dir_h, n);
+    vec3 dir_brdf = (material.material_type == MATERIAL_TYPE_MICROSURFACE) ? (normalize(direction - 2.0 * dot(direction, dir_h) * dir_h)) : dir_h;
+    //if (dot(dir_l, n) < 0.0) dir_l = -dir_l;
+    float pdf_brdf = (material.material_type == MATERIAL_TYPE_MICROSURFACE) ? (pdf(direction, dir_brdf, n, material, 1) / (- 4.0 * dot(dir_h, direction))) : pdf(direction, dir_brdf, n, material, 0);//转变为出射光的分布
+
+    vec3 dir_cos = SampleReflect(direction, n, material, 0);
+    dir_cos = toWorld(dir_cos, n);
+    float pdf_cos = pdf(direction, dir_cos, n, material, 0);
+
+    vec3 albedo_record = material.albedo_color * vec3(texture(texture_samplers[material.albedo_texture_id], hit_record_p.tex_coord));
+    //throughput *= material.albedo_color * vec3(texture(texture_samplers[material.albedo_texture_id], hit_record.tex_coord));
+    TraceRay(p, guo.envmap_light_direction);
+    //radiance += throughput * guo.envmap_minor_color;
+    
+    if (ray_payload.t < 0.0f) {
+      //radiance += max(dot(guo.envmap_light_direction, n), 0.0) * 2.0 * throughput * albedo_record * guo.envmap_major_color;
+    }
+
+    //Mis 直接光
+    float w_1 = pdf_light * pdf_light / (pdf_light * pdf_light + pdf_brdf * pdf_brdf);
+    float w_2 = 1 - w_1;
+    TraceRay(p_l, dir_lp);
+    vec3 reflection, L_dir = vec3(0.0);
+    if((length(hit_record.position - p_l) - dis_lp > -0.01) || materials[hit_record.hit_entity_id].material_type == MATERIAL_TYPE_SMOKE) {
+      reflection = MaterialReflect(direction, -dir_lp, n, material, albedo_record);
+      if (materials[hit_record.hit_entity_id].material_type == MATERIAL_TYPE_SMOKE) {
+        vec3 p_start = hit_record.position;
+        TraceRay(hit_record.position + 0.001 * dir_lp, dir_lp);
+        throughput *= exp(-sigma_t * length(hit_record.position - p_start));
+      }
+      L_dir += throughput * light_hit_record.emission * light_hit_record.emission_strength * dot(-dir_lp, n) * reflection / pdf_light * w_1; 
+    } 
+
+    TraceRay(p, dir_brdf);
+    if (ray_payload.t > -1.0 + 0.01 && materials[hit_record.hit_entity_id].material_type == MATERIAL_TYPE_EMISSION) {
+      reflection = MaterialReflect(direction, dir_brdf, n, material, albedo_record);
+      L_dir += throughput * hit_record.emission * hit_record.emission_strength * dot(dir_brdf, n) * reflection / pdf_brdf * w_2; 
+    }
+
+    radiance += L_dir;
+
+    //Mis 间接光
+    float prob = RandomFloat();
+    float F = fresnel(direction, n, 10.5);
+    vec3 dir_l = dir_cos;
+    float pdf_l = pdf_cos;
+
+    if (material.material_type == MATERIAL_TYPE_MICROSURFACE && prob_mis >= (1 - F) * max(max(albedo_record.x, albedo_record.y), albedo_record.z))  {
+      dir_l = dir_brdf;
+      pdf_l = pdf_brdf;
+    }
+    
+    if (prob < 0.8){
+      TraceRay(p, dir_l);
+      if (ray_payload.t > -1.0 + 0.01 && materials[hit_record.hit_entity_id].material_type != MATERIAL_TYPE_EMISSION) {
+        reflection = MaterialReflect(direction, dir_l, n, material, albedo_record);
+        throughput *= reflection * dot(dir_l, n) / 0.8 / pdf_l;
+        origin = p + dir_l * 0.01;
+        direction = dir_l;
+      }
+    } else 
+      break;
+    depth++;
+  }
+  
+  /*for (int b = 0; b < guo.num_bounces; b++) {
     TraceRay(origin, direction);
 
     if (ray_payload.t == -1.0) {
@@ -96,11 +358,11 @@ vec3 SampleRay(vec3 origin, vec3 direction) {
         break;
       }
     }
-  }
+  }*/
   return radiance;
 }
 
-void main() {
+/*void main() {
   const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
   const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
   vec2 d = inUV * 2.0 - 1.0;
@@ -114,11 +376,63 @@ void main() {
     vec4 origin = camera_to_world * vec4(0, 0, 0, 1);
     vec4 target = screen_to_camera * vec4(d.x, d.y, 1, 1);
     vec4 direction = camera_to_world * vec4(normalize(target.xyz), 0);
-
     imageStore(accumulation_color, ivec2(gl_LaunchIDEXT.xy),
                imageLoad(accumulation_color, ivec2(gl_LaunchIDEXT.xy)) +
                    vec4(SampleRay(origin.xyz, direction.xyz), 1.0));
     imageStore(accumulation_number, ivec2(gl_LaunchIDEXT.xy),
                imageLoad(accumulation_number, ivec2(gl_LaunchIDEXT.xy)) + 1.0);
   }
+}*/
+
+vec2 SampleUnitDisk() {
+  float r = sqrt(RandomFloat());
+  float theta = 2.0 * PI * RandomFloat();
+  return vec2(r * sin(theta), r * cos(theta));
+}
+
+int dis_motion = 5;
+
+void main() {
+  const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
+  const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
+  vec2 d = inUV * 2.0 - 1.0;
+
+  mat4 camera_to_world = inverse(guo.camera);
+  mat4 screen_to_camera = inverse(guo.projection);
+
+  for (int i = 0; i < guo.num_samples; i++) {
+    InitRandomSeed(uint(pixelCenter.x), uint(pixelCenter.y), guo.accumulated_sample + i);
+
+    float lensRadius = guo.aperture / 2.0;
+    vec2 lensSample = lensRadius * SampleUnitDisk();
+    vec3 lensOffset = vec3(lensSample.x, lensSample.y, 0);
+
+    vec4 origin = vec4((guo.enable_depth == 1) ? (lensOffset) : vec3(0), 1);
+    vec4 target = screen_to_camera * vec4(d.x, d.y, 1, 1);
+    vec4 direction = camera_to_world * vec4(normalize(target.xyz - origin.xyz), 0);
+
+    
+    if (guo.enable_motion == 1) 
+      for (int j = 0; j < dis_motion; ++j){
+        origin += vec4(normalize(guo.dir_motion), 0);
+        imageStore(accumulation_color, ivec2(gl_LaunchIDEXT.xy),
+                imageLoad(accumulation_color, ivec2(gl_LaunchIDEXT.xy)) +
+                    vec4(SampleRay((camera_to_world * origin).xyz, direction.xyz), 1.0));
+        imageStore(accumulation_number, ivec2(gl_LaunchIDEXT.xy),
+                imageLoad(accumulation_number, ivec2(gl_LaunchIDEXT.xy)) + 1.0);
+      }
+      
+    else {
+      origin = camera_to_world * origin;
+      imageStore(accumulation_color, ivec2(gl_LaunchIDEXT.xy),
+                imageLoad(accumulation_color, ivec2(gl_LaunchIDEXT.xy)) +
+                    vec4(SampleRay(origin.xyz, direction.xyz), 1.0));
+      imageStore(accumulation_number, ivec2(gl_LaunchIDEXT.xy),
+                imageLoad(accumulation_number, ivec2(gl_LaunchIDEXT.xy)) + 1.0);
+    }
+  }
+
+  
+
+
 }

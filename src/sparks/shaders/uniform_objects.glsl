@@ -18,10 +18,14 @@ struct GlobalUniformObject {
   float clamp;
   float gamma;
   float aspect;
+  int enable_depth;
+  int enable_motion;
+  vec3 dir_motion;
 };
 
 struct EntityUniformObject {
   mat4 model;
+  float area;
 };
 
 struct ObjectInfo {

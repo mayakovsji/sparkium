@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<scene>
+	<camera>
+		<transform type="lookat">
+			<eye value="-2.0 0.0 14.0"/>
+			<center value="0.0 0.0 0.0"/>
+			<up value="0.0 1.0 0.0"/>
+		</transform>
+	</camera>
+
+	<envmap type="file" value="../../textures/envmap_clouds_4k.hdr"/>
+
+	<model type="obj" name="Light">
+		<filename value="../../meshes/circle.obj"/>
+
+		<transform type="world">
+			<scale value="2 2 2"/>
+			<translation value="10 30 -60"/>
+			<rotation value="-60 0 -0"/>
+		</transform>
+		
+		<material type="emission">
+			<emission value="1.0 1.0 1.0"/>
+			<emission_strength value="600"/>
+		</material>
+	</model>
+
+	<model type="obj" name="agua">
+		<filename value="../../meshes/agua.obj"/>
+
+		<transform type="world">
+			<scale value="0.1 0.1 0.1"/>
+		</transform>
+
+		<material type="specular">
+			<albedo value="1 1 1"/>
+		</material>
+	</model>
+
+	<model type="obj" name="bosquevert">
+		<filename value="../../meshes/bosquevert.obj"/>
+
+		<transform type="world">
+			<scale value="0.1 0.1 0.1"/>
+		</transform>
+
+		<material type="lambertian">
+			<albedo value="0.8 0.8 0.8"/>
+			<albedo_texture value="../../textures/BosqueBL_rough.jpeg"/>
+		</material>
+	</model>
+
+	<model type="obj" name="bunquer">
+		<filename value="../../meshes/bunquer.obj"/>
+
+		<transform type="world">
+			<scale value="0.1 0.1 0.1"/>
+		</transform>
+
+		<material type="lambertian">
+			<albedo value="0.8 0.8 0.8"/>
+			<albedo_texture value="../../textures/BunkerBL_diffuse.jpeg"/>
+		</material>
+	</model>
+
+	<model type="obj" name="suelo">
+		<filename value="../../meshes/suelo.obj"/>
+
+		<transform type="world">
+			<scale value="0.1 0.1 0.1"/>
+		</transform>
+
+		<material type="lambertian">
+			<albedo value="0.8 0.8 0.8"/>
+			<albedo_texture value="../../textures/SueloBL_diffuse.jpeg"/>
+		</material>
+	</model>
+
+	<model type="obj" name="t-10M">
+		<filename value="../../meshes/t-10M.obj"/>
+
+		<transform type="world">
+			<translation value="-4.546 -2.675 4.166"/>
+			<rotation value="5.779 -0.274 2.704"/>
+		</transform>
+
+
+		<material type="microsurface">
+			<albedo value="0.8 0.8 0.8"/>
+			<albedo_texture value="../../textures/LilyPackedImage-0000.png"/>
+		</material>
+	</model>
+
+	<model type="obj" name="smoke1">
+		<filename value="../../meshes/smoke.obj"/>
+
+		<transform type="world">
+			<scale value="0.1 0.1 0.1"/>
+			<rotation value="105.284 -31.708 75.717"/>
+			<translation value="-4.538 -2.457 4.094"/>
+		</transform>
+		
+		<material type="smoke">
+			<albedo value="1 1 1"/>
+		</material>
+	</model>
+
+	<model type="obj" name="smoke2">
+		<filename value="../../meshes/smoke.obj"/>
+
+		<transform type="world">
+			<scale value="0.1 0.1 0.1"/>
+			<rotation value="-40.255 18.782 119.447"/>
+			<translation value="-5.654 -2.242 4.727"/>
+		</transform>
+
+		<material type="smoke">
+			<albedo value="1 1 1"/>
+		</material>
+	</model>
+
+
+
+</scene>
